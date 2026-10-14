@@ -26,6 +26,10 @@ mt:
   external:
     enabled: ${MT_EXTERNAL_ENABLED:true}
     base-url: ${MT_EXTERNAL_BASE_URL:http://localhost:8090}
+  channel:
+    enabled: ${MT_CHANNEL_ENABLED:true}
+    base-url: ${CHANNEL_BASE_URL:http://localhost:8080}
+    tenant: ${CHANNEL_TENANT:nexusbank}
 
 management:
   endpoint:

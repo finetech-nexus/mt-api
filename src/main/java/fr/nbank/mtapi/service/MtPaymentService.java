@@ -34,15 +34,18 @@ public class MtPaymentService {
     private final OperationLogService operationLog;
     private final MtProperties properties;
     private final ObjectMapper json;
+    private final ChannelClient channel;
 
     public MtPaymentService(MtTransactionRepository transactions, ExternalNetworkClient network,
-            CallbackForwarder callbacks, OperationLogService operationLog, MtProperties properties, ObjectMapper json) {
+            CallbackForwarder callbacks, OperationLogService operationLog, MtProperties properties, ObjectMapper json,
+            ChannelClient channel) {
         this.transactions = transactions;
         this.network = network;
         this.callbacks = callbacks;
         this.operationLog = operationLog;
         this.properties = properties;
         this.json = json;
+        this.channel = channel;
     }
 
     public Map<String, Object> authorize(Map<String, Object> body) {
@@ -273,6 +276,18 @@ public class MtPaymentService {
         row.setRequestJson(write(body));
         row.setUpdatedAt(Instant.now());
         transactions.save(row);
+        if (row.getDirection() == Direction.INBOUND && properties.getChannel().isEnabled()) {
+            row.setStatus("PENDING");
+            row.setResponseCode("00");
+            row.setReasonMessage("Workflow started");
+            transactions.save(row);
+            String workflowId = channel.start(row, body);
+            row.setNetworkReference(workflowId);
+            row.setUpdatedAt(Instant.now());
+            transactions.save(row);
+            operationLog.record("channel", row.getOperation(), row.getExternalId() + " " + workflowId);
+            return toStatus(row);
+        }
         if (callNetwork && properties.getExternal().isEnabled() && row.getDirection() == Direction.OUTBOUND) {
             network.dispatch(row.getOperation(), row.getExternalId(), toStatus(row));
         }
