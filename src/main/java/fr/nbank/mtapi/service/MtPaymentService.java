@@ -49,6 +49,31 @@ public class MtPaymentService {
         return createCard(body, "AUTHORIZE", Direction.OUTBOUND, true);
     }
 
+    public Map<String, Object> issue(Map<String, Object> body) {
+        String holder = required(body.get("holderName"), "holderName");
+        String productId = required(body.get("productId"), "productId");
+        String currency = text(body.get("currency"));
+        if (currency == null || currency.isBlank()) {
+            currency = "TND";
+        }
+        Map<String, Object> issued = network.issue(body);
+        MtTransaction row = base(productId, BigDecimal.ZERO, currency, Direction.OUTBOUND);
+        row.setOperation("ISSUE");
+        row.setStatus("ISSUED");
+        row.setResponseCode("00");
+        row.setReasonMessage("Card issued");
+        row.setCardholderName(holder);
+        row.setPanToken(text(issued.get("last4")));
+        row.setNetworkReference(text(issued.get("processorCardId")));
+        row.setRequestJson(write(body));
+        row.setUpdatedAt(Instant.now());
+        transactions.save(row);
+        operationLog.record("card-api", "ISSUE", row.getExternalId() + " " + holder);
+        Map<String, Object> response = new LinkedHashMap<>(issued);
+        response.put("transactionId", row.getExternalId());
+        return response;
+    }
+
     public Map<String, Object> inbound(Map<String, Object> body) {
         String operation = text(body.get("operation"));
         String normalized = operation == null ? "AUTHORIZE" : operation.toUpperCase(Locale.ROOT);

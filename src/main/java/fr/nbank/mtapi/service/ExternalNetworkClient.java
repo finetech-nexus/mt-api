@@ -5,9 +5,12 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.HttpStatus;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.server.ResponseStatusException;
 
 /** Sends the card message to the external Monétique Tunisie host. Sandbox host is the simulator. */
 @Service
@@ -36,6 +39,26 @@ public class ExternalNetworkClient {
             log.info("MT network call accepted operation={} ref={}", operation, clientReference);
         } catch (Exception ex) {
             log.warn("MT network call failed ref={}: {}", clientReference, ex.getMessage());
+        }
+    }
+
+    public Map<String, Object> issue(Map<String, Object> body) {
+        if (!properties.getExternal().isEnabled()) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "MT external network is disabled");
+        }
+        String base = properties.getExternal().getBaseUrl().replaceAll("/+$", "");
+        try {
+            Map<String, Object> issued = http.post().uri(base + "/simulate/mt/cards").body(body).retrieve()
+                    .body(new ParameterizedTypeReference<>() {});
+            if (issued == null || issued.get("pan") == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Simulator did not issue the card");
+            }
+            return issued;
+        } catch (ResponseStatusException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            log.warn("MT card issue failed: {}", ex.getMessage());
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Simulator did not issue the card");
         }
     }
 }

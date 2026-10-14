@@ -49,4 +49,9 @@ public class GatewayController {
     public Map<String, Object> callback(@RequestBody Map<String, Object> body) {
         return payments.onNetworkCallback(body);
     }
+
+    @PostMapping("/cards")
+    public Map<String, Object> issue(@RequestBody Map<String, Object> body) {
+        return payments.issue(body);
+    }
 }
