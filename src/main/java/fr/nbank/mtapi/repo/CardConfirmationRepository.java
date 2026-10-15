@@ -16,6 +16,8 @@ public interface CardConfirmationRepository extends JpaRepository<CardConfirmati
 
     List<CardConfirmation> findByUserIdAndStatusInOrderByCreatedAtDesc(String userId, Collection<String> statuses);
 
+    List<CardConfirmation> findByStatusIn(Collection<String> statuses);
+
     @Query("select c from CardConfirmation c where c.userId = :userId and c.status = 'INSUFFICIENT_BALANCE' and (c.seen = false or c.seen is null) order by c.createdAt desc")
     List<CardConfirmation> findOpenNotices(String userId);
 }

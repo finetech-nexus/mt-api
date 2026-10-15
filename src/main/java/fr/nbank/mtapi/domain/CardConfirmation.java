@@ -35,6 +35,8 @@ public class CardConfirmation {
     @Column(nullable = false)
     private Instant createdAt;
 
+    private Instant expiresAt;
+
     public Long getId() { return id; }
     public String getTransactionId() { return transactionId; }
     public void setTransactionId(String transactionId) { this.transactionId = transactionId; }
@@ -62,4 +64,6 @@ public class CardConfirmation {
     public void setStatus(String status) { this.status = status; }
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
+    public Instant getExpiresAt() { return expiresAt; }
+    public void setExpiresAt(Instant expiresAt) { this.expiresAt = expiresAt; }
 }

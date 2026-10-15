@@ -2,6 +2,7 @@ package fr.nbank.mtapi.service;
 
 import fr.nbank.mtapi.domain.CardConfirmation;
 import fr.nbank.mtapi.repo.CardConfirmationRepository;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -13,6 +14,8 @@ import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class CardConfirmationService {
+    public static final Duration CONFIRMATION_WINDOW = Duration.ofMinutes(3);
+
     private final CardConfirmationRepository confirmations;
     private final MtPaymentService payments;
 
@@ -59,6 +62,9 @@ public class CardConfirmationService {
         if ("INSUFFICIENT_BALANCE".equals(state)) {
             row.setSeen(false);
         }
+        if ("CONFIRMATION_REQUIRED".equals(state) && row.getExpiresAt() == null) {
+            row.setExpiresAt(Instant.now().plus(CONFIRMATION_WINDOW));
+        }
         confirmations.save(row);
         return view(row);
     }
@@ -75,7 +81,7 @@ public class CardConfirmationService {
             return List.of();
         }
         return confirmations.findByUserIdAndStatusInOrderByCreatedAtDesc(userId, List.of("PENDING", "CONFIRMATION_REQUIRED"))
-                .stream().map(this::view).toList();
+                .stream().filter(row -> !expired(row)).map(this::view).toList();
     }
 
     public List<Map<String, Object>> notices(String userId) {
@@ -94,6 +100,12 @@ public class CardConfirmationService {
         CardConfirmation row = require(transactionId);
         if (userId != null && row.getUserId() != null && !row.getUserId().equals(userId)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "This payment belongs to another customer");
+        }
+        if (expired(row)) {
+            row.setStatus("EXPIRED");
+            row.setOperationState("CANCELLED");
+            confirmations.save(row);
+            return view(row);
         }
         if (!openForDecision(row.getStatus())) {
             return view(row);
@@ -153,6 +165,26 @@ public class CardConfirmationService {
         return view(row);
     }
 
+    @Transactional
+    public void expireDue() {
+        for (CardConfirmation row : confirmations.findByStatusIn(List.of("PENDING", "CONFIRMATION_REQUIRED"))) {
+            if (!expired(row) || !openForDecision(row.getStatus())) {
+                continue;
+            }
+            row.setStatus("EXPIRED");
+            row.setOperationState("CANCELLED");
+            confirmations.save(row);
+            if (row.getClientReference() == null) {
+                continue;
+            }
+            try {
+                payments.resumeAuthorization(row.getClientReference(), false);
+            } catch (RuntimeException ignored) {
+                // The screen stays closed. A later decision cannot reopen an expired payment.
+            }
+        }
+    }
+
     public Map<String, Object> expire(String transactionId) {
         CardConfirmation row = require(transactionId);
         if (openForDecision(row.getStatus())) {
@@ -195,7 +227,16 @@ public class CardConfirmationService {
         body.put("status", row.getStatus());
         body.put("operationState", row.getOperationState() == null ? row.getStatus() : row.getOperationState());
         body.put("createdAt", row.getCreatedAt());
+        body.put("expiresAt", row.getExpiresAt());
         return body;
+    }
+
+    private static boolean expired(CardConfirmation row) {
+        Instant deadline = row.getExpiresAt();
+        if (deadline == null && row.getCreatedAt() != null) {
+            deadline = row.getCreatedAt().plus(CONFIRMATION_WINDOW);
+        }
+        return deadline != null && !deadline.isAfter(Instant.now());
     }
 
     private static boolean openForDecision(String status) {
