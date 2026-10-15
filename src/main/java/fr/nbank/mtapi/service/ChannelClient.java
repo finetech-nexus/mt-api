@@ -32,6 +32,8 @@ public class ChannelClient {
         payload.put("panToken", first(body.get("panToken"), body.get("pan"), row.getPanToken()));
         payload.put("merchantId", row.getMerchantId());
         payload.put("cardholderName", row.getCardholderName());
+        payload.put("authorizationId", row.getAuthorizationId());
+        payload.put("originalTransactionId", row.getOriginalExternalId());
         payload.put("entryMode", first(body.get("entryMode"), body.get("channel")));
         payload.put("ecommerce", ecommerce(body));
         try {
