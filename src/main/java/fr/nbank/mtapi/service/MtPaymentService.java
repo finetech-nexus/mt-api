@@ -303,6 +303,38 @@ public class MtPaymentService {
         return toStatus(row);
     }
 
+    /** Starts the same authorization process again after the cardholder confirms or cancels. */
+    @SuppressWarnings("unchecked")
+    public void resumeAuthorization(String clientReference, boolean userConfirmed) {
+        if (clientReference == null || clientReference.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "This payment cannot be resumed");
+        }
+        MtTransaction row = findBusiness(clientReference);
+        Map<String, Object> body = new LinkedHashMap<>();
+        if (row.getRequestJson() != null && !row.getRequestJson().isBlank()) {
+            try {
+                body.putAll(json.readValue(row.getRequestJson(), Map.class));
+            } catch (Exception ex) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "The original payment cannot be read");
+            }
+        }
+        body.put("userConfirmed", userConfirmed);
+        body.put("confirmationRequired", true);
+        body.putIfAbsent("panToken", row.getPanToken());
+        body.putIfAbsent("merchantId", row.getMerchantId());
+        body.putIfAbsent("terminalId", row.getTerminalId());
+        body.putIfAbsent("cardholderName", row.getCardholderName());
+        body.putIfAbsent("amount", row.getAmount());
+        body.putIfAbsent("currency", row.getCurrency());
+        String workflowId = channel.start(row, body);
+        row.setNetworkReference(workflowId);
+        row.setStatus("PENDING");
+        row.setReasonMessage(userConfirmed ? "Cardholder confirmed" : "Cardholder cancelled");
+        row.setUpdatedAt(Instant.now());
+        transactions.save(row);
+        operationLog.record("channel", row.getOperation(), row.getExternalId() + " resume " + workflowId);
+    }
+
     private void applyFinal(MtTransaction row) {
         switch (row.getOperation()) {
             case "AUTHORIZE" -> {

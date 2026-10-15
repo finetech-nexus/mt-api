@@ -25,6 +25,9 @@ public class CardConfirmation {
     private String amount;
     private String currency;
     private String merchant;
+    private String availableBalance;
+    private String operationState;
+    private Boolean seen;
 
     @Column(nullable = false)
     private String status;
@@ -49,6 +52,12 @@ public class CardConfirmation {
     public void setCurrency(String currency) { this.currency = currency; }
     public String getMerchant() { return merchant; }
     public void setMerchant(String merchant) { this.merchant = merchant; }
+    public String getAvailableBalance() { return availableBalance; }
+    public void setAvailableBalance(String availableBalance) { this.availableBalance = availableBalance; }
+    public String getOperationState() { return operationState; }
+    public void setOperationState(String operationState) { this.operationState = operationState; }
+    public Boolean getSeen() { return seen; }
+    public void setSeen(Boolean seen) { this.seen = seen; }
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
     public Instant getCreatedAt() { return createdAt; }

@@ -66,7 +66,28 @@ public class GatewayController {
 
     @GetMapping("/confirmations")
     public Map<String, Object> pendingConfirmations(@RequestParam String userId) {
-        return Map.of("confirmations", confirmations.pending(userId));
+        return confirmations.list(userId);
+    }
+
+    @GetMapping("/confirmations/{transactionId}")
+    public Map<String, Object> confirmation(@PathVariable String transactionId) {
+        return confirmations.one(transactionId);
+    }
+
+    @PostMapping("/confirmations/claim")
+    public Map<String, Object> claim(@RequestBody Map<String, Object> body) {
+        return confirmations.claim(body);
+    }
+
+    @PostMapping("/confirmations/blocked")
+    public Map<String, Object> blocked(@RequestBody Map<String, Object> body) {
+        return confirmations.markBlocked(body);
+    }
+
+    @PostMapping("/confirmations/{transactionId}/seen")
+    public Map<String, Object> seen(@PathVariable String transactionId, @RequestBody(required = false) Map<String, Object> body) {
+        String userId = body == null || body.get("userId") == null ? null : String.valueOf(body.get("userId"));
+        return confirmations.seen(transactionId, userId);
     }
 
     @PostMapping("/confirmations/{transactionId}/decision")

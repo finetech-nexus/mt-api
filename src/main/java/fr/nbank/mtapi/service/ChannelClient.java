@@ -36,6 +36,18 @@ public class ChannelClient {
         payload.put("originalTransactionId", row.getOriginalExternalId());
         payload.put("entryMode", first(body.get("entryMode"), body.get("channel")));
         payload.put("ecommerce", ecommerce(body));
+        payload.put("terminalId", first(body.get("terminalId")));
+        boolean decided = body.containsKey("userConfirmed") && body.get("userConfirmed") != null
+                && !String.valueOf(body.get("userConfirmed")).isBlank();
+        payload.put("awaitingDecision", !decided);
+        if (decided) {
+            payload.put("userConfirmed", truth(body.get("userConfirmed")));
+        }
+        if (body.containsKey("confirmationRequired")) {
+            payload.put("confirmationRequired", truth(body.get("confirmationRequired")));
+        } else {
+            payload.put("confirmationRequired", ecommerce(body));
+        }
         try {
             Map<?, ?> response = http.post()
                     .uri("/channel/mt/inbound")
@@ -61,6 +73,10 @@ public class ChannelClient {
         } catch (RestClientException ex) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Channel did not accept the cardholder decision");
         }
+    }
+
+    private static boolean truth(Object value) {
+        return Boolean.TRUE.equals(value) || "true".equalsIgnoreCase(String.valueOf(value));
     }
 
     private static boolean ecommerce(Map<String, Object> body) {
