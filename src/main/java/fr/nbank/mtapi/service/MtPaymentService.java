@@ -165,6 +165,12 @@ public class MtPaymentService {
         return transactions.findAll(spec, pageable);
     }
 
+    public int purge() {
+        int count = (int) transactions.count();
+        transactions.deleteAll();
+        return count;
+    }
+
     private Map<String, Object> capture(Map<String, Object> body, boolean callNetwork) {
         String authId = required(body.get("authorizationId"), "authorizationId");
         MtTransaction original = findBusiness(authId);
