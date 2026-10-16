@@ -105,7 +105,9 @@ public class MtPaymentService {
     }
 
     public MtTransaction get(Long id) {
-        return transactions.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Transaction not found"));
+        MtTransaction row = transactions.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Transaction not found"));
+        markVoidable(java.util.List.of(row));
+        return row;
     }
 
     public Map<String, Object> onNetworkCallback(Map<String, Object> body) {
@@ -139,6 +141,11 @@ public class MtPaymentService {
 
     public Page<MtTransaction> search(Direction direction, String status, String operation, String q,
             LocalDate from, LocalDate to, Pageable pageable) {
+        return search(direction, status, operation, q, from, to, pageable, null);
+    }
+
+    public Page<MtTransaction> search(Direction direction, String status, String operation, String q,
+            LocalDate from, LocalDate to, Pageable pageable, Boolean voidable) {
         Instant fromTs = from == null ? Instant.EPOCH : from.atStartOfDay(ZoneOffset.UTC).toInstant();
         Instant toTs = to == null ? Instant.parse("9999-12-31T00:00:00Z") : to.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
         Specification<MtTransaction> spec = (root, query, cb) -> {
@@ -162,11 +169,45 @@ public class MtPaymentService {
                         cb.like(cb.lower(cb.coalesce(root.get("cardholderName"), "")), like),
                         cb.like(cb.lower(cb.coalesce(root.get("authCode"), "")), like)));
             }
+            if (Boolean.TRUE.equals(voidable)) {
+                predicates.add(cb.not(root.get("operation").in("CAPTURE", "REFUND", "VOID")));
+                var followUp = query.subquery(Integer.class);
+                var child = followUp.from(MtTransaction.class);
+                followUp.select(cb.literal(1));
+                followUp.where(
+                        cb.equal(child.get("originalExternalId"), root.get("externalId")),
+                        child.get("operation").in("CAPTURE", "REFUND", "VOID"),
+                        cb.notEqual(child.get("status"), "FAILED"));
+                predicates.add(cb.not(cb.exists(followUp)));
+            }
             predicates.add(cb.greaterThanOrEqualTo(root.get("createdAt"), fromTs));
             predicates.add(cb.lessThan(root.get("createdAt"), toTs));
             return cb.and(predicates.toArray(jakarta.persistence.criteria.Predicate[]::new));
         };
-        return transactions.findAll(spec, pageable);
+        Page<MtTransaction> page = transactions.findAll(spec, pageable);
+        markVoidable(page.getContent());
+        return page;
+    }
+
+    public boolean voidable(MtTransaction row) {
+        markVoidable(java.util.List.of(row));
+        return row.isVoidable();
+    }
+
+    private void markVoidable(java.util.Collection<MtTransaction> rows) {
+        java.util.List<String> codes = rows.stream()
+                .map(MtTransaction::getExternalId)
+                .filter(code -> code != null && !code.isBlank())
+                .distinct()
+                .toList();
+        java.util.Set<String> blocked = codes.isEmpty()
+                ? java.util.Set.of()
+                : new java.util.HashSet<>(transactions.findFollowUpCodes(codes));
+        for (MtTransaction row : rows) {
+            String operation = row.getOperation();
+            boolean followUp = "CAPTURE".equals(operation) || "REFUND".equals(operation) || "VOID".equals(operation);
+            row.setVoidable(!followUp && row.getExternalId() != null && !blocked.contains(row.getExternalId()));
+        }
     }
 
     public int purge() {

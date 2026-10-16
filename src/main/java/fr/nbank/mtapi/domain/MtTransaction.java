@@ -7,12 +7,16 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import java.math.BigDecimal;
 import java.time.Instant;
 
 @Entity
-@Table(name = "mt_transaction")
+@Table(name = "mt_transaction", indexes = {
+        @Index(name = "idx_mt_tx_followup", columnList = "original_external_id, operation")
+})
 public class MtTransaction {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -64,6 +68,10 @@ public class MtTransaction {
 
     @Column(nullable = false)
     private Instant updatedAt = Instant.now();
+
+    /** True when no capture, refund, or void points at this transaction code. Not stored. */
+    @Transient
+    private boolean voidable;
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -117,4 +125,6 @@ public class MtTransaction {
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
+    public boolean isVoidable() { return voidable; }
+    public void setVoidable(boolean voidable) { this.voidable = voidable; }
 }

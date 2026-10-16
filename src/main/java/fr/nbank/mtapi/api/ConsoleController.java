@@ -41,9 +41,10 @@ public class ConsoleController {
             @RequestParam(required = false) String q,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) Boolean voidable,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return payments.search(direction, status, operation, q, from, to, page(page, size));
+        return payments.search(direction, status, operation, q, from, to, page(page, size), voidable);
     }
 
     @DeleteMapping("/transactions")
@@ -95,6 +96,10 @@ public class ConsoleController {
     public Map<String, Object> voidTransaction(@RequestHeader(value = "X-User", required = false) String user,
             @PathVariable Long id, @RequestBody(required = false) Map<String, Object> body) {
         MtTransaction original = payments.get(id);
+        if (!payments.voidable(original)) {
+            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.CONFLICT,
+                    "A capture, refund, or void already exists for this transaction");
+        }
         Map<String, Object> payload = body == null ? new HashMap<>() : new HashMap<>(body);
         payload.put("originalTransactionId", original.getExternalId());
         payload.putIfAbsent("callbackUrl", original.getCallbackUrl());

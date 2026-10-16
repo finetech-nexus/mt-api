@@ -145,6 +145,27 @@ class MtPaymentServiceTest {
         assertThrows(ResponseStatusException.class, () -> payments.authorize(body));
     }
 
+    @Test
+    void openAuthorizationStaysVoidableUntilAFollowUpExists() {
+        Map<String, Object> authorized = payments.authorize(card(UUID.randomUUID().toString()));
+        String code = String.valueOf(authorized.get("transactionId"));
+        var open = payments.search(null, null, null, code, null, null, PageRequest.of(0, 10), true);
+        assertEquals(1, open.getTotalElements());
+        assertTrue(open.getContent().get(0).isVoidable());
+
+        Map<String, Object> captureBody = new HashMap<>();
+        captureBody.put("authorizationId", code);
+        captureBody.put("amount", new BigDecimal("5.000"));
+        payments.capture(captureBody);
+
+        var closed = payments.search(null, null, null, code, null, null, PageRequest.of(0, 10), true);
+        assertEquals(0, closed.getTotalElements());
+        Long id = transactions.findByExternalId(code).orElseThrow().getId();
+        assertFalse(payments.get(id).isVoidable());
+        assertTrue(payments.search(null, null, "CAPTURE", null, null, null, PageRequest.of(0, 50)).getContent().stream()
+                .anyMatch(row -> code.equals(row.getOriginalExternalId()) && !row.isVoidable()));
+    }
+
     private static Map<String, Object> card(String orderId) {
         Map<String, Object> body = new HashMap<>();
         body.put("orderId", orderId);
