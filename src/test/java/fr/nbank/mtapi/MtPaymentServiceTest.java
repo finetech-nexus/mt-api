@@ -2,8 +2,10 @@ package fr.nbank.mtapi;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import fr.nbank.mtapi.domain.Direction;
+import fr.nbank.mtapi.repo.MtTransactionRepository;
 import fr.nbank.mtapi.service.MtPaymentService;
 import java.math.BigDecimal;
 import java.util.HashMap;
@@ -29,6 +31,8 @@ import org.springframework.web.server.ResponseStatusException;
 class MtPaymentServiceTest {
     @Autowired
     private MtPaymentService payments;
+    @Autowired
+    private MtTransactionRepository transactions;
 
     @Test
     void authorizeCaptureVoidAndFilter() {
@@ -70,6 +74,30 @@ class MtPaymentServiceTest {
 
         var page = payments.search(Direction.OUTBOUND, null, "AUTHORIZE", "Amina", null, null, PageRequest.of(0, 10));
         assertEquals(1, page.getTotalElements());
+    }
+
+    @Test
+    void captureBelowTheAuthorizationIsMarkedPartial() {
+        Map<String, Object> body = new HashMap<>();
+        body.put("orderId", UUID.randomUUID().toString());
+        body.put("amount", new BigDecimal("20.000"));
+        body.put("currency", "TND");
+        body.put("panToken", "tok_pan_4242");
+        body.put("merchantId", "M-1");
+        Map<String, Object> authorized = payments.authorize(body);
+        Map<String, Object> held = new HashMap<>();
+        held.put("clientReference", authorized.get("transactionId"));
+        held.put("outcome", "SETTLED");
+        held.put("holdTransferCode", "54347853-126f-4d37-942d-a391ecf7d3ae");
+        payments.onNetworkCallback(held);
+
+        Map<String, Object> captureBody = new HashMap<>();
+        captureBody.put("authorizationId", authorized.get("transactionId"));
+        captureBody.put("amount", new BigDecimal("15.000"));
+        Map<String, Object> captured = payments.capture(captureBody);
+        assertEquals("CAPTURED", captured.get("status"));
+        String request = transactions.findByExternalId(String.valueOf(captured.get("transactionId"))).orElseThrow().getRequestJson();
+        assertTrue(request.contains("\"partialCapture\":true"));
     }
 
     @Test

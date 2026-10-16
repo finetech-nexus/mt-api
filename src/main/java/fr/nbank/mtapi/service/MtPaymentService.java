@@ -202,6 +202,7 @@ public class MtPaymentService {
         if (original.getHoldTransferCode() != null && !original.getHoldTransferCode().isBlank()) {
             request.put("holdTransferCode", original.getHoldTransferCode());
         }
+        request.put("partialCapture", amount.compareTo(original.getAmount()) < 0);
         return finish(row, request, callNetwork);
     }
 
