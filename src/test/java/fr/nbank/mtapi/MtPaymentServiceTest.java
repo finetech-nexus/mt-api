@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import fr.nbank.mtapi.domain.Direction;
 import fr.nbank.mtapi.repo.MtTransactionRepository;
+import fr.nbank.mtapi.service.CardControlClient;
 import fr.nbank.mtapi.service.MtPaymentService;
 import java.math.BigDecimal;
 import java.util.HashMap;
@@ -27,7 +28,8 @@ import org.springframework.web.server.ResponseStatusException;
         "spring.datasource.password=",
         "spring.jpa.hibernate.ddl-auto=create-drop",
         "spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.H2Dialect",
-        "mt.external.enabled=false"
+        "mt.external.enabled=false",
+        "mt.cards.enabled=false"
 })
 class MtPaymentServiceTest {
     @Autowired
@@ -66,6 +68,9 @@ class MtPaymentServiceTest {
         voidBody.put("originalTransactionId", authorized.get("transactionId"));
         Map<String, Object> voided = payments.voidTransaction(voidBody);
         assertEquals("PENDING", voided.get("status"));
+        assertFalse(MtPaymentService.awaitsCardholder(Map.of("entryMode", "POS")));
+        assertTrue(MtPaymentService.awaitsCardholder(Map.of("entryMode", "ECOM")));
+        assertFalse(MtPaymentService.awaitsCardholder(Map.of("entryMode", "ECOM", "userConfirmed", true)));
 
         Map<String, Object> callback = new HashMap<>();
         callback.put("clientReference", voided.get("transactionId"));
@@ -164,6 +169,20 @@ class MtPaymentServiceTest {
         assertFalse(payments.get(id).isVoidable());
         assertTrue(payments.search(null, null, "CAPTURE", null, null, null, PageRequest.of(0, 50)).getContent().stream()
                 .anyMatch(row -> code.equals(row.getOriginalExternalId()) && !row.isVoidable()));
+    }
+
+    @Test
+    void cardDeclineCodes() {
+        assertEquals("05", CardControlClient.responseCode("CARD_FROZEN"));
+        assertEquals("05", CardControlClient.responseCode("CARD_INACTIVE"));
+        assertEquals("57", CardControlClient.responseCode("CHANNEL_ATM"));
+        assertEquals("57", CardControlClient.responseCode("CHANNEL_CONTACTLESS"));
+        assertEquals("61", CardControlClient.responseCode("LIMIT_DAILY_AMOUNT"));
+        assertEquals("61", CardControlClient.responseCode("LIMIT_MONTHLY_AMOUNT"));
+        assertEquals("61", CardControlClient.responseCode("LIMIT_DAILY_COUNT"));
+        assertEquals("55", CardControlClient.responseCode("INVALID_PIN"));
+        assertEquals("13", CardControlClient.responseCode("INVALID_AMOUNT"));
+        assertEquals("14", CardControlClient.responseCode("CARD_NOT_FOUND"));
     }
 
     private static Map<String, Object> card(String orderId) {

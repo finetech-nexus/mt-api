@@ -35,10 +35,11 @@ public class MtPaymentService {
     private final MtProperties properties;
     private final ObjectMapper json;
     private final ChannelClient channel;
+    private final CardControlClient cards;
 
     public MtPaymentService(MtTransactionRepository transactions, ExternalNetworkClient network,
             CallbackForwarder callbacks, OperationLogService operationLog, MtProperties properties, ObjectMapper json,
-            ChannelClient channel) {
+            ChannelClient channel, CardControlClient cards) {
         this.transactions = transactions;
         this.network = network;
         this.callbacks = callbacks;
@@ -46,6 +47,7 @@ public class MtPaymentService {
         this.properties = properties;
         this.json = json;
         this.channel = channel;
+        this.cards = cards;
     }
 
     public Map<String, Object> authorize(Map<String, Object> body) {
@@ -335,13 +337,27 @@ public class MtPaymentService {
     }
 
     private Map<String, Object> finish(MtTransaction row, Map<String, Object> body, boolean callNetwork) {
-        row.setRequestJson(write(body));
+        Map<String, Object> stored = new LinkedHashMap<>(body);
+        stored.remove("pin");
+        row.setRequestJson(write(stored));
         row.setUpdatedAt(Instant.now());
         transactions.save(row);
         if (row.getDirection() == Direction.INBOUND && properties.getChannel().isEnabled()) {
-            row.setStatus("PENDING");
-            row.setResponseCode("00");
-            row.setReasonMessage("Workflow started");
+            CardControlClient.Decline decline = cards.check(row, body);
+            if (decline != null) {
+                row.setStatus("FAILED");
+                row.setResponseCode(decline.responseCode());
+                row.setReasonMessage(decline.message());
+                row.setAuthCode(null);
+                row.setUpdatedAt(Instant.now());
+                transactions.save(row);
+                return toStatus(row);
+            }
+            if (awaitsCardholder(body)) {
+                row.setStatus("PENDING");
+                row.setResponseCode("00");
+                row.setReasonMessage("Waiting for cardholder confirmation");
+            }
             transactions.save(row);
             String workflowId = channel.start(row, body);
             row.setNetworkReference(workflowId);
@@ -482,7 +498,7 @@ public class MtPaymentService {
         status.put("reasonMessage", row.getReasonMessage());
         status.put("updatedAt", row.getUpdatedAt());
         Map<String, Object> details = new LinkedHashMap<>();
-        details.put("scheme", "Monétique Tunisie");
+        details.put("scheme", "Card");
         details.put("mti", row.getMti());
         details.put("stan", row.getStan());
         details.put("rrn", row.getRrn());
@@ -528,6 +544,27 @@ public class MtPaymentService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "MT " + name + " required");
         }
         return text;
+    }
+
+    public static boolean awaitsCardholder(Map<String, Object> body) {
+        if (body.containsKey("userConfirmed") && body.get("userConfirmed") != null
+                && !String.valueOf(body.get("userConfirmed")).isBlank()) {
+            return false;
+        }
+        if (body.containsKey("confirmationRequired")) {
+            return Boolean.TRUE.equals(body.get("confirmationRequired"))
+                    || "true".equalsIgnoreCase(String.valueOf(body.get("confirmationRequired")));
+        }
+        Object flag = body.get("ecommerce");
+        if (Boolean.TRUE.equals(flag) || "true".equalsIgnoreCase(String.valueOf(flag))) {
+            return true;
+        }
+        String mode = text(first(body.get("entryMode"), body.get("channel"), body.get("posEntryMode")));
+        if (mode == null) {
+            return false;
+        }
+        mode = mode.toUpperCase(Locale.ROOT);
+        return mode.equals("ECOM") || mode.equals("ECOMMERCE") || mode.equals("ONLINE") || mode.equals("CNP");
     }
 
     private static Object first(Object... values) {

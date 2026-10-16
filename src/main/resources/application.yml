@@ -30,6 +30,9 @@ mt:
     enabled: ${MT_CHANNEL_ENABLED:true}
     base-url: ${CHANNEL_BASE_URL:http://localhost:8080}
     tenant: ${CHANNEL_TENANT:nexusbank}
+  cards:
+    enabled: ${MT_CARDS_ENABLED:true}
+    base-url: ${CARD_API_BASE_URL:http://core-api-card-management-api.api.svc.cluster.local}
 
 management:
   endpoint:

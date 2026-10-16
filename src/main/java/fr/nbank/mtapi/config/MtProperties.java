@@ -8,6 +8,7 @@ public class MtProperties {
     private String callbackBaseUrl = "http://localhost:8097";
     private External external = new External();
     private Channel channel = new Channel();
+    private Cards cards = new Cards();
 
     public String getMerchantId() { return merchantId; }
     public void setMerchantId(String merchantId) { this.merchantId = merchantId; }
@@ -17,6 +18,8 @@ public class MtProperties {
     public void setExternal(External external) { this.external = external; }
     public Channel getChannel() { return channel; }
     public void setChannel(Channel channel) { this.channel = channel; }
+    public Cards getCards() { return cards; }
+    public void setCards(Cards cards) { this.cards = cards; }
 
     public static class External {
         private boolean enabled = true;
@@ -39,5 +42,15 @@ public class MtProperties {
         public void setBaseUrl(String baseUrl) { this.baseUrl = baseUrl; }
         public String getTenant() { return tenant; }
         public void setTenant(String tenant) { this.tenant = tenant; }
+    }
+
+    public static class Cards {
+        private boolean enabled = true;
+        private String baseUrl = "http://core-api-card-management-api.api.svc.cluster.local";
+
+        public boolean isEnabled() { return enabled; }
+        public void setEnabled(boolean enabled) { this.enabled = enabled; }
+        public String getBaseUrl() { return baseUrl; }
+        public void setBaseUrl(String baseUrl) { this.baseUrl = baseUrl; }
     }
 }
