@@ -24,5 +24,7 @@ class ChannelClientTest {
         assertEquals(Boolean.TRUE, payload.get("partialCapture"));
         assertEquals("30.000", payload.get("amount"));
         assertEquals("65e228cd-4a0f-45bc-9aaa-387447a17605", payload.get("holdTransferCode"));
+        body.put("holdAlreadyReleased", true);
+        assertEquals(Boolean.TRUE, ChannelClient.inboundPayload(row, body).get("holdAlreadyReleased"));
     }
 }

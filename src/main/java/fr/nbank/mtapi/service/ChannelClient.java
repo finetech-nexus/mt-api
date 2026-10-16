@@ -79,6 +79,7 @@ public class ChannelClient {
             payload.put("holdTransferCode", body.get("holdTransferCode"));
         }
         payload.put("partialCapture", truth(body.get("partialCapture")));
+        payload.put("holdAlreadyReleased", truth(body.get("holdAlreadyReleased")));
         if (body.containsKey("confirmationRequired")) {
             payload.put("confirmationRequired", truth(body.get("confirmationRequired")));
         } else {

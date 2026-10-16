@@ -251,7 +251,9 @@ public class MtPaymentService {
         row.setTerminalId(original.getTerminalId());
         row.setCallbackUrl(text(first(body.get("callbackUrl"), original.getCallbackUrl())));
         Map<String, Object> request = new LinkedHashMap<>(body);
-        if (original.getHoldTransferCode() != null && !original.getHoldTransferCode().isBlank()) {
+        boolean released = settledCapture(original.getExternalId());
+        request.put("holdAlreadyReleased", released);
+        if (!released && original.getHoldTransferCode() != null && !original.getHoldTransferCode().isBlank()) {
             request.put("holdTransferCode", original.getHoldTransferCode());
         }
         return finish(row, request, callNetwork);
@@ -410,6 +412,16 @@ public class MtPaymentService {
         row.setRrn(String.format("%012d", ThreadLocalRandom.current().nextLong(1_000_000_000_000L)));
         row.setNetworkReference(row.getExternalId());
         return row;
+    }
+
+    private boolean settledCapture(String authorizationId) {
+        if (authorizationId == null || authorizationId.isBlank()) {
+            return false;
+        }
+        return transactions.count((root, query, cb) -> cb.and(
+                cb.equal(root.get("originalExternalId"), authorizationId),
+                cb.equal(root.get("operation"), "CAPTURE"),
+                cb.or(cb.equal(root.get("status"), "SETTLED"), cb.equal(root.get("status"), "CAPTURED")))) > 0;
     }
 
     private MtTransaction findBusiness(String id) {

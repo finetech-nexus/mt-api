@@ -1,6 +1,7 @@
 package fr.nbank.mtapi;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -98,6 +99,33 @@ class MtPaymentServiceTest {
         assertEquals("CAPTURED", captured.get("status"));
         String request = transactions.findByExternalId(String.valueOf(captured.get("transactionId"))).orElseThrow().getRequestJson();
         assertTrue(request.contains("\"partialCapture\":true"));
+    }
+
+    @Test
+    void voidAfterCaptureSkipsTheReleasedHold() {
+        Map<String, Object> body = new HashMap<>();
+        body.put("orderId", UUID.randomUUID().toString());
+        body.put("amount", new BigDecimal("40.000"));
+        body.put("currency", "TND");
+        body.put("panToken", "tok_pan_4242");
+        body.put("merchantId", "M-1");
+        Map<String, Object> authorized = payments.authorize(body);
+        Map<String, Object> held = new HashMap<>();
+        held.put("clientReference", authorized.get("transactionId"));
+        held.put("outcome", "SETTLED");
+        held.put("holdTransferCode", "e4e4186c-ef56-4ead-9094-4991b1605481");
+        payments.onNetworkCallback(held);
+        Map<String, Object> captureBody = new HashMap<>();
+        captureBody.put("authorizationId", authorized.get("transactionId"));
+        captureBody.put("amount", new BigDecimal("38.000"));
+        payments.capture(captureBody);
+
+        Map<String, Object> voidBody = new HashMap<>();
+        voidBody.put("originalTransactionId", authorized.get("transactionId"));
+        Map<String, Object> voided = payments.voidTransaction(voidBody);
+        String request = transactions.findByExternalId(String.valueOf(voided.get("transactionId"))).orElseThrow().getRequestJson();
+        assertTrue(request.contains("\"holdAlreadyReleased\":true"));
+        assertFalse(request.contains("e4e4186c-ef56-4ead-9094-4991b1605481"));
     }
 
     @Test
