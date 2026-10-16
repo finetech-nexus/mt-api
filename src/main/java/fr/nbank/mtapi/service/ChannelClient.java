@@ -23,6 +23,35 @@ public class ChannelClient {
     }
 
     public String start(MtTransaction row, Map<String, Object> body) {
+        Map<String, Object> payload = inboundPayload(row, body);
+        try {
+            Map<?, ?> response = http.post()
+                    .uri("/channel/mt/inbound")
+                    .header("Platform-TenantId", properties.getChannel().getTenant())
+                    .body(payload)
+                    .retrieve()
+                    .body(Map.class);
+            if (response == null || response.get("transactionId") == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Channel did not start a workflow");
+            }
+            return String.valueOf(response.get("transactionId"));
+        } catch (RestClientException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Channel is unavailable");
+        }
+    }
+
+    public void publishDecision(String transactionId, boolean accepted) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("transactionId", transactionId);
+        payload.put("accepted", accepted);
+        try {
+            http.post().uri("/channel/mt/decision").body(payload).retrieve().toBodilessEntity();
+        } catch (RestClientException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Channel did not accept the cardholder decision");
+        }
+    }
+
+    static Map<String, Object> inboundPayload(MtTransaction row, Map<String, Object> body) {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("operation", row.getOperation());
         payload.put("clientReference", row.getExternalId());
@@ -49,36 +78,13 @@ public class ChannelClient {
         if (body.get("holdTransferCode") != null && !String.valueOf(body.get("holdTransferCode")).isBlank()) {
             payload.put("holdTransferCode", body.get("holdTransferCode"));
         }
+        payload.put("partialCapture", truth(body.get("partialCapture")));
         if (body.containsKey("confirmationRequired")) {
             payload.put("confirmationRequired", truth(body.get("confirmationRequired")));
         } else {
             payload.put("confirmationRequired", ecommerce(body));
         }
-        try {
-            Map<?, ?> response = http.post()
-                    .uri("/channel/mt/inbound")
-                    .header("Platform-TenantId", properties.getChannel().getTenant())
-                    .body(payload)
-                    .retrieve()
-                    .body(Map.class);
-            if (response == null || response.get("transactionId") == null) {
-                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Channel did not start a workflow");
-            }
-            return String.valueOf(response.get("transactionId"));
-        } catch (RestClientException ex) {
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Channel is unavailable");
-        }
-    }
-
-    public void publishDecision(String transactionId, boolean accepted) {
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("transactionId", transactionId);
-        payload.put("accepted", accepted);
-        try {
-            http.post().uri("/channel/mt/decision").body(payload).retrieve().toBodilessEntity();
-        } catch (RestClientException ex) {
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Channel did not accept the cardholder decision");
-        }
+        return payload;
     }
 
     private static boolean truth(Object value) {
