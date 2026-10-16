@@ -303,13 +303,22 @@ public class MtPaymentService {
         return toStatus(row);
     }
 
-    /** Starts the same authorization process again after the cardholder confirms or cancels. */
-    @SuppressWarnings("unchecked")
+    /** Starts the same authorization process again after the cardholder confirms, cancels, or the window expires. */
     public void resumeAuthorization(String clientReference, boolean userConfirmed) {
+        resumeAuthorization(clientReference, userConfirmed, false);
+    }
+
+    @SuppressWarnings("unchecked")
+    public void resumeAuthorization(String clientReference, boolean userConfirmed, boolean expired) {
         if (clientReference == null || clientReference.isBlank()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "This payment cannot be resumed");
         }
         MtTransaction row = findBusiness(clientReference);
+        if (!"PENDING".equals(row.getStatus())) {
+            return;
+        }
+        row.setStatus("CLOSING");
+        transactions.saveAndFlush(row);
         Map<String, Object> body = new LinkedHashMap<>();
         if (row.getRequestJson() != null && !row.getRequestJson().isBlank()) {
             try {
@@ -319,6 +328,7 @@ public class MtPaymentService {
             }
         }
         body.put("userConfirmed", userConfirmed);
+        body.put("expired", expired);
         body.put("confirmationRequired", true);
         body.putIfAbsent("panToken", row.getPanToken());
         body.putIfAbsent("merchantId", row.getMerchantId());
@@ -326,10 +336,17 @@ public class MtPaymentService {
         body.putIfAbsent("cardholderName", row.getCardholderName());
         body.putIfAbsent("amount", row.getAmount());
         body.putIfAbsent("currency", row.getCurrency());
-        String workflowId = channel.start(row, body);
+        String workflowId;
+        try {
+            workflowId = channel.start(row, body);
+        } catch (RuntimeException ex) {
+            row.setStatus("PENDING");
+            transactions.save(row);
+            throw ex;
+        }
         row.setNetworkReference(workflowId);
         row.setStatus("PENDING");
-        row.setReasonMessage(userConfirmed ? "Cardholder confirmed" : "Cardholder cancelled");
+        row.setReasonMessage(expired ? "Confirmation window expired" : userConfirmed ? "Cardholder confirmed" : "Cardholder cancelled");
         row.setUpdatedAt(Instant.now());
         transactions.save(row);
         operationLog.record("channel", row.getOperation(), row.getExternalId() + " resume " + workflowId);

@@ -43,6 +43,9 @@ public class ChannelClient {
         if (decided) {
             payload.put("userConfirmed", truth(body.get("userConfirmed")));
         }
+        if (body.containsKey("expired")) {
+            payload.put("expired", truth(body.get("expired")));
+        }
         if (body.containsKey("confirmationRequired")) {
             payload.put("confirmationRequired", truth(body.get("confirmationRequired")));
         } else {

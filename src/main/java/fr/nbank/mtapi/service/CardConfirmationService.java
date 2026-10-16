@@ -105,6 +105,7 @@ public class CardConfirmationService {
             row.setStatus("EXPIRED");
             row.setOperationState("CANCELLED");
             confirmations.save(row);
+            resumeClosed(row);
             return view(row);
         }
         if (!openForDecision(row.getStatus())) {
@@ -178,10 +179,21 @@ public class CardConfirmationService {
                 continue;
             }
             try {
-                payments.resumeAuthorization(row.getClientReference(), false);
+                payments.resumeAuthorization(row.getClientReference(), false, true);
             } catch (RuntimeException ignored) {
                 // The screen stays closed. A later decision cannot reopen an expired payment.
             }
+        }
+    }
+
+    private void resumeClosed(CardConfirmation row) {
+        if (row.getClientReference() == null) {
+            return;
+        }
+        try {
+            payments.resumeAuthorization(row.getClientReference(), false, true);
+        } catch (RuntimeException ignored) {
+            // The screen stays closed. A later decision cannot reopen an expired payment.
         }
     }
 
@@ -191,6 +203,7 @@ public class CardConfirmationService {
             row.setStatus("EXPIRED");
             row.setOperationState("CANCELLED");
             confirmations.save(row);
+            resumeClosed(row);
         }
         return view(row);
     }
