@@ -43,6 +43,14 @@ class MtPaymentServiceTest {
         assertEquals("AUTHORIZED", authorized.get("status"));
         assertEquals("00", authorized.get("responseCode"));
 
+        Map<String, Object> held = new HashMap<>();
+        held.put("clientReference", authorized.get("transactionId"));
+        held.put("outcome", "SETTLED");
+        held.put("holdTransferCode", "00de21be-41bb-4781-ad47-6fa2636a3b56");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> details = (Map<String, Object>) payments.onNetworkCallback(held).get("details");
+        assertEquals("00de21be-41bb-4781-ad47-6fa2636a3b56", details.get("holdTransferCode"));
+
         Map<String, Object> captureBody = new HashMap<>();
         captureBody.put("authorizationId", authorized.get("transactionId"));
         captureBody.put("amount", new BigDecimal("12.500"));

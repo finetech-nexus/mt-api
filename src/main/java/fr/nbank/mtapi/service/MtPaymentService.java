@@ -125,6 +125,10 @@ public class MtPaymentService {
         if (body.get("networkReference") != null) {
             row.setNetworkReference(text(body.get("networkReference")));
         }
+        String holdTransferCode = text(body.get("holdTransferCode"));
+        if (holdTransferCode != null) {
+            row.setHoldTransferCode(holdTransferCode);
+        }
         row.setUpdatedAt(Instant.now());
         transactions.save(row);
         Map<String, Object> status = toStatus(row);
@@ -194,7 +198,11 @@ public class MtPaymentService {
         row.setTerminalId(original.getTerminalId());
         row.setCardholderName(original.getCardholderName());
         row.setCallbackUrl(text(first(body.get("callbackUrl"), original.getCallbackUrl())));
-        return finish(row, body, callNetwork);
+        Map<String, Object> request = new LinkedHashMap<>(body);
+        if (original.getHoldTransferCode() != null && !original.getHoldTransferCode().isBlank()) {
+            request.put("holdTransferCode", original.getHoldTransferCode());
+        }
+        return finish(row, request, callNetwork);
     }
 
     private Map<String, Object> refund(Map<String, Object> body, boolean callNetwork) {
@@ -241,7 +249,11 @@ public class MtPaymentService {
         row.setMerchantId(original.getMerchantId());
         row.setTerminalId(original.getTerminalId());
         row.setCallbackUrl(text(first(body.get("callbackUrl"), original.getCallbackUrl())));
-        return finish(row, body, callNetwork);
+        Map<String, Object> request = new LinkedHashMap<>(body);
+        if (original.getHoldTransferCode() != null && !original.getHoldTransferCode().isBlank()) {
+            request.put("holdTransferCode", original.getHoldTransferCode());
+        }
+        return finish(row, request, callNetwork);
     }
 
     private Map<String, Object> createCard(Map<String, Object> body, String operation, Direction direction, boolean callNetwork) {
@@ -420,6 +432,7 @@ public class MtPaymentService {
         details.put("mti", row.getMti());
         details.put("stan", row.getStan());
         details.put("rrn", row.getRrn());
+        details.put("holdTransferCode", row.getHoldTransferCode());
         details.put("direction", row.getDirection().name());
         details.put("operation", row.getOperation());
         status.put("details", details);

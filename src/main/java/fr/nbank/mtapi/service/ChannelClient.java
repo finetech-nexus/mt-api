@@ -46,6 +46,9 @@ public class ChannelClient {
         if (body.containsKey("expired")) {
             payload.put("expired", truth(body.get("expired")));
         }
+        if (body.get("holdTransferCode") != null && !String.valueOf(body.get("holdTransferCode")).isBlank()) {
+            payload.put("holdTransferCode", body.get("holdTransferCode"));
+        }
         if (body.containsKey("confirmationRequired")) {
             payload.put("confirmationRequired", truth(body.get("confirmationRequired")));
         } else {

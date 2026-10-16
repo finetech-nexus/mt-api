@@ -54,6 +54,7 @@ public class MtTransaction {
     private String reasonMessage;
     private String callbackUrl;
     private String networkReference;
+    private String holdTransferCode;
 
     @Column(columnDefinition = "text")
     private String requestJson;
@@ -108,6 +109,8 @@ public class MtTransaction {
     public void setCallbackUrl(String callbackUrl) { this.callbackUrl = callbackUrl; }
     public String getNetworkReference() { return networkReference; }
     public void setNetworkReference(String networkReference) { this.networkReference = networkReference; }
+    public String getHoldTransferCode() { return holdTransferCode; }
+    public void setHoldTransferCode(String holdTransferCode) { this.holdTransferCode = holdTransferCode; }
     public String getRequestJson() { return requestJson; }
     public void setRequestJson(String requestJson) { this.requestJson = requestJson; }
     public Instant getCreatedAt() { return createdAt; }
